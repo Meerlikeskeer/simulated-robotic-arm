@@ -1,0 +1,23 @@
+# Virtual environments
+.venv/
+venv/
+
+# Python caches and generated package files
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Tool caches and coverage reports
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local secrets
+.env
+.env.*
+
+# Operating system files
+.DS_Store
