@@ -1,55 +1,33 @@
 import math
 import numpy as np
 
+from arm import Arm
 from kinematics import joint_positions
 
 
 def test_joint_positions():
 
-    l1 = 1.0
-    l2 = 1.0
-    theta1 = math.pi / 4
-    theta2 = math.pi / 4
-    expected = np.array(
-        [
-            [0, 0],
-            [0.70710678, 0.70710678],
-            [0.70710678, 1.70710678],
-        ]
-    )
-    # Each case: (l1, l2, theta1, theta2, expected_positions)
+    # Each case: (arm configuration, expected positions)
     test_cases = [
         (
-            1.0,
-            1.0,
-            0.0,
-            0.0,
+            Arm(angles=(0.0, 0.0), lengths=(1.0, 1.0)),
             [[0, 0], [1, 0], [2, 0]],
         ),
         (
-            1.0,
-            1.0,
-            0.0,
-            math.pi / 2,
+            Arm(angles=(0.0, math.pi / 2), lengths=(1.0, 1.0)),
             [[0, 0], [1, 0], [1, 1]],
         ),
         (
-            2.0,
-            1.0,
-            0.0,
-            math.pi,
+            Arm(angles=(0.0, math.pi), lengths=(2.0, 1.0)),
             [[0, 0], [2, 0], [1, 0]],
         ),
         (
-            1.0,
-            1.0,
-            math.pi / 2,
-            0.0,
+            Arm(angles=(math.pi / 2, 0.0), lengths=(1.0, 1.0)),
             [[0, 0], [0, 1], [0, 2]],
         ),
     ]
-    for l1, l2, theta1, theta2, expected in test_cases:
-        actual = joint_positions(theta1, theta2, l1, l2)
+    for arm, expected in test_cases:
+        actual = joint_positions(arm)
         expected = np.array(expected)
         np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-8)
     print("All tests passed")
