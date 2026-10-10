@@ -1,9 +1,8 @@
-import math
-import numpy as np
+import visualization
 
 
 def main() -> None:
-    pass
+    visualization.interactive_arm(0, 0.5, 1.0, 1.0)
 
 
 if __name__ == "__main__":
