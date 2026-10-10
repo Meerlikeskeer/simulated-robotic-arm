@@ -3,6 +3,37 @@ from matplotlib.widgets import Slider
 import math
 import arm
 import kinematics
+import numpy as np
+import neural_network
+
+
+def plot_test_errors(dataset, parameters):
+    """Color unseen angle pairs by their Euclidean tip-position error."""
+    inputs = dataset[:, :2]
+    targets = dataset[:, 2:]
+    predictions = neural_network.predict_positions(inputs, parameters)
+    errors = np.linalg.norm(predictions - targets, axis=1)
+
+    fig, ax = plt.subplots()
+    points = ax.scatter(
+        inputs[:, 0], inputs[:, 1], c=errors, cmap="viridis", s=20, vmin=0
+    )
+    fig.colorbar(points, ax=ax, label="Positional error (link-length units)")
+    worst = np.argmax(errors)
+    ax.scatter(
+        inputs[worst, 0], inputs[worst, 1],
+        s=150, facecolors="none", edgecolors="red", label="Largest sampled error",
+    )
+    ax.set_title("Unseen test error by joint configuration")
+    ax.set_xlabel("θ1 (rad)")
+    ax.set_ylabel("θ2 (rad)")
+    ax.set_xlim(-math.pi, math.pi)
+    ax.set_ylim(-math.pi, math.pi)
+    ax.set_aspect("equal")
+    ax.grid(True)
+    ax.legend()
+    fig.tight_layout()
+    plt.show()
 
 
 def plot_arm(positions, l1, l2):
@@ -76,3 +107,77 @@ def plot_datasets(dataset):
 
     fig.tight_layout()
     plt.show()
+
+
+def watch_training(inputs, targets, learning_rate=0.01, epochs=1000):
+    import numpy as np
+    import neural_network
+
+    fig, (loss_ax, position_ax) = plt.subplots(1, 2, figsize=(11, 5))
+
+    loss_ax.set_title("Training loss")
+    loss_ax.set_xlabel("Epoch")
+    loss_ax.set_ylabel("Mean half-squared error")
+    loss_ax.set_yscale("log")
+    loss_ax.grid(True)
+    (loss_line,) = loss_ax.plot([], [])
+
+    position_ax.set_title("Targets and current predictions")
+    position_ax.scatter(
+        targets[:, 0],
+        targets[:, 1],
+        s=15,
+        alpha=0.4,
+        label="Targets",
+    )
+    predictions_plot = position_ax.scatter(
+        [],
+        [],
+        s=15,
+        color="orange",
+        alpha=0.6,
+        label="Predictions",
+    )
+    position_ax.set_xlabel("x")
+    position_ax.set_ylabel("y")
+    position_ax.set_aspect("equal")
+    position_ax.grid(True)
+    position_ax.legend()
+
+    limit = max(1.0, float(np.abs(targets).max()) * 1.2)
+    position_ax.set_xlim(-limit, limit)
+    position_ax.set_ylim(-limit, limit)
+
+    epoch_history = []
+    loss_history = []
+
+    def update(epoch, weights1, biases1, weights2, biases2):
+        # Each row is an example, hence the transposed weight matrices.
+        hidden = np.tanh(inputs @ weights1.T + biases1)
+        predictions = hidden @ weights2.T + biases2
+
+        errors = predictions - targets
+        loss = 0.5 * np.mean(np.sum(errors**2, axis=1))
+
+        epoch_history.append(epoch)
+        loss_history.append(max(float(loss), 1e-15))
+        loss_line.set_data(epoch_history, loss_history)
+        loss_ax.relim()
+        loss_ax.autoscale_view()
+
+        predictions_plot.set_offsets(predictions)
+        position_ax.set_title(f"Predictions after epoch {epoch}")
+
+        fig.canvas.draw_idle()
+        plt.pause(0.001)
+
+    plt.show(block=False)
+    parameters = neural_network.train_nonlinear_network(
+        inputs,
+        targets,
+        learning_rate,
+        epochs,
+        callback=update,
+    )
+    plt.show()
+    return parameters
