@@ -1,9 +1,11 @@
-import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider
 import math
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.widgets import Slider
+
 import arm
 import kinematics
-import numpy as np
 import neural_network
 
 
@@ -14,24 +16,31 @@ def plot_test_errors(dataset, parameters):
     predictions = neural_network.predict_positions(inputs, parameters)
     errors = np.linalg.norm(predictions - targets, axis=1)
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(12, 10))
     points = ax.scatter(
         inputs[:, 0], inputs[:, 1], c=errors, cmap="viridis", s=20, vmin=0
     )
     fig.colorbar(points, ax=ax, label="Positional error (link-length units)")
     worst = np.argmax(errors)
     ax.scatter(
-        inputs[worst, 0], inputs[worst, 1],
-        s=150, facecolors="none", edgecolors="red", label="Largest sampled error",
+        inputs[worst, 0],
+        inputs[worst, 1],
+        s=350,
+        facecolors="none",
+        edgecolors="red",
+        linewidths=2,
+        zorder=5,
+        label="Largest sampled error",
     )
     ax.set_title("Unseen test error by joint configuration")
     ax.set_xlabel("θ1 (rad)")
     ax.set_ylabel("θ2 (rad)")
-    ax.set_xlim(-math.pi, math.pi)
-    ax.set_ylim(-math.pi, math.pi)
+    padding = 0.2
+    ax.set_xlim(-math.pi - padding, math.pi + padding)
+    ax.set_ylim(-math.pi - padding, math.pi + padding)
     ax.set_aspect("equal")
     ax.grid(True)
-    ax.legend()
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12))
     fig.tight_layout()
     plt.show()
 
@@ -111,6 +120,7 @@ def plot_datasets(dataset):
 
 def watch_training(inputs, targets, learning_rate=0.01, epochs=1000):
     import numpy as np
+
     import neural_network
 
     fig, (loss_ax, position_ax) = plt.subplots(1, 2, figsize=(11, 5))
@@ -181,3 +191,47 @@ def watch_training(inputs, targets, learning_rate=0.01, epochs=1000):
     )
     plt.show()
     return parameters
+
+
+def live_model(arm1, parameters, show=True):
+    """Compare the analytical arm with a learned tip; no physical control."""
+    positions = kinematics.joint_positions(arm1)
+    ax, line = plot_arm(positions, *arm1.lengths)
+    fig = ax.figure
+    fig.subplots_adjust(bottom=0.28)
+    line.set_label("Analytical arm")
+    predicted = ax.scatter(
+        [], [], marker="x", s=120, color="orange", label="Learned tip", zorder=4
+    )
+    (error_line,) = ax.plot([], [], "r--", label="Position error")
+    text = ax.text(0.02, 0.97, "", transform=ax.transAxes, va="top")
+    ax.legend(loc="lower left")
+    sliders = [
+        Slider(
+            fig.add_axes([0.2, y, 0.65, 0.03]),
+            f"θ{i + 1} (rad)",
+            -math.pi,
+            math.pi,
+            valinit=arm1.angles[i],
+        )
+        for i, y in enumerate((0.12, 0.06))
+    ]
+
+    def update(_):
+        angles = np.array([s.val for s in sliders])
+        actual = kinematics.joint_positions(arm.Arm(tuple(angles), arm1.lengths))
+        tip = neural_network.predict_positions(angles[None, :], parameters)[0]
+        line.set_data(actual[:, 0], actual[:, 1])
+        predicted.set_offsets(tip[None, :])
+        error_line.set_data([actual[-1, 0], tip[0]], [actual[-1, 1], tip[1]])
+        text.set_text(f"Positional error: {np.linalg.norm(tip - actual[-1]):.5f}")
+        fig.canvas.draw_idle()
+
+    for slider in sliders:
+        slider.on_changed(update)
+    update(None)
+    # Retain controls even when used non-blocking.
+    fig._arm_sliders = sliders
+    if show:
+        plt.show()
+    return fig, sliders

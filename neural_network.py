@@ -1,9 +1,25 @@
 import numpy as np
 
 
+def encode_angles(inputs):
+    """Map angle pairs to periodic features: sin1, cos1, sin2, cos2."""
+    inputs = np.asarray(inputs)
+    return np.stack(
+        (
+            np.sin(inputs[..., 0]),
+            np.cos(inputs[..., 0]),
+            np.sin(inputs[..., 1]),
+            np.cos(inputs[..., 1]),
+        ),
+        axis=-1,
+    )
+
+
 def predict_positions(inputs, parameters):
     """Predict positions for rows of angle pairs without updating parameters."""
     weights1, biases1, weights2, biases2 = parameters
+    if weights1.shape[1] == 4:
+        inputs = encode_angles(inputs)
     hidden = np.tanh(inputs @ weights1.T + biases1)
     return hidden @ weights2.T + biases2
 
@@ -83,16 +99,27 @@ def train_linear_network(input_thetas, target_positions, learning_rate, epochs):
 
 
 def train_nonlinear_network(
-    input_thetas, target_positions, learning_rate, epochs, callback=None
+    input_thetas,
+    target_positions,
+    learning_rate,
+    epochs,
+    callback=None,
+    periodic=False,
+    seed=None,
+    shuffle=False,
 ):
     hidden_size = 16
-    weights1 = np.random.randn(hidden_size, 2) * 0.01
+    rng = np.random.default_rng(seed)
+    features = encode_angles(input_thetas) if periodic else np.asarray(input_thetas)
+    weights1 = rng.normal(size=(hidden_size, features.shape[1])) * 0.01
     biases1 = np.zeros(hidden_size)
-    weights2 = np.random.randn(2, hidden_size) * 0.01
+    weights2 = rng.normal(size=(2, hidden_size)) * 0.01
     biases2 = np.zeros(2)
 
     for epoch in range(epochs):
-        for inputs, target in zip(input_thetas, target_positions):
+        order = rng.permutation(len(features)) if shuffle else np.arange(len(features))
+        for index in order:
+            inputs, target = features[index], target_positions[index]
             weights1, biases1, weights2, biases2 = nonlinear_training_step(
                 weights1,
                 biases1,
